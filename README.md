@@ -7,8 +7,8 @@ Open `index.html` in a browser. React, MUI and Babel load from unpkg, so no buil
 ## Layout
 
 - **Header:** server name, status, region, Foundry version and one primary button (Start server when stopped, Open Foundry when running), with the clickable invite link directly under them.
-- **Server:** power, Foundry version, storage, region.
-- **Files & access:** Foundry URL and admin password; FileBrowser, username, password and WebDAV host.
+- **Server:** power, server URL, administrator password, Foundry version, storage, region.
+- **Files:** FileBrowser, username, password and WebDAV host.
 - **Backups:** game data export, then your backups and automatic backups in one table.
 - **Settings:** Discord notifications and the danger zone.
 

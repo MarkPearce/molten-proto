@@ -316,10 +316,10 @@ function ServerHeader({ status, start, toast, onCopy }) {
   );
 }
 
-function ServerTab({ status, stop, toast }) {
+function ServerTab({ status, stop, toast, onCopy }) {
   const pct = Math.round((SERVER.storageUsed / SERVER.storageTotal) * 100);
   return (
-    <SectionCard title="Server" subtitle="Power, Foundry version and storage for this server.">
+    <Card>
       <Row
         label="Power"
         // Hidden rather than removed so the row keeps its height when they appear.
@@ -333,6 +333,8 @@ function ServerTab({ status, stop, toast }) {
           {status === 'starting' && <Typography variant="body2" color="text.secondary" noWrap>{STARTING_TEXT}</Typography>}
         </Stack>
       </Row>
+      <Row label="Server URL"><Value text={SERVER.serverUrl} onOpen={() => toast(LINKS_OFF)} label="Server URL" onCopy={onCopy} /></Row>
+      <Row label="Administrator password" hint="For the Foundry setup screen"><Secret label="Administrator password" onCopy={onCopy} /></Row>
       <Row
         label="Foundry version"
         actions={<Button variant="outlined" onClick={() => toast(`Reinstalling Foundry ${SERVER.foundry}…`)}>Reinstall {SERVER.foundry}</Button>}
@@ -359,29 +361,22 @@ function ServerTab({ status, stop, toast }) {
       <Row label="Region" last>
         <Typography>{SERVER.region}</Typography>
       </Row>
-    </SectionCard>
+    </Card>
   );
 }
 
 function FilesTab({ running, toast, onCopy }) {
   return (
-    <Stack gap={3}>
-      <SectionCard title="Foundry" subtitle="Where you and your players sign in.">
-        <Row label="Server URL"><Value text={SERVER.serverUrl} onOpen={() => toast(LINKS_OFF)} label="Server URL" onCopy={onCopy} /></Row>
-        <Row label="Administrator password" hint="For the Foundry setup screen" last><Secret label="Administrator password" onCopy={onCopy} /></Row>
-      </SectionCard>
-
-      <SectionCard
-        title="File manager"
-        subtitle={running ? 'Upload maps, tokens and modules. Available while the server is running.' : 'Start the server to manage files.'}
-        action={<Button variant="outlined" onClick={() => toast(LINKS_OFF)} endIcon={<Icon name="open" />} disabled={!running}>Open FileBrowser</Button>}
-      >
-        <Row label="FileBrowser"><Value text={SERVER.fileBrowser} onOpen={() => toast(LINKS_OFF)} label="FileBrowser URL" onCopy={onCopy} /></Row>
-        <Row label="Username"><Value text={SERVER.ftpUser} label="Username" onCopy={onCopy} /></Row>
-        <Row label="Password"><Secret label="FileBrowser password" onCopy={onCopy} /></Row>
-        <Row label="WebDAV host" hint="For desktop sync apps" last><Value text={SERVER.webdav} label="WebDAV host" onCopy={onCopy} /></Row>
-      </SectionCard>
-    </Stack>
+    <SectionCard
+      title="File manager"
+      subtitle={running ? 'Upload maps, tokens and modules. Available while the server is running.' : 'Start the server to manage files.'}
+      action={<Button variant="outlined" onClick={() => toast(LINKS_OFF)} endIcon={<Icon name="open" />} disabled={!running}>Open FileBrowser</Button>}
+    >
+      <Row label="FileBrowser"><Value text={SERVER.fileBrowser} onOpen={() => toast(LINKS_OFF)} label="FileBrowser URL" onCopy={onCopy} /></Row>
+      <Row label="Username"><Value text={SERVER.ftpUser} label="Username" onCopy={onCopy} /></Row>
+      <Row label="Password"><Secret label="FileBrowser password" onCopy={onCopy} /></Row>
+      <Row label="WebDAV host" hint="For desktop sync apps" last><Value text={SERVER.webdav} label="WebDAV host" onCopy={onCopy} /></Row>
+    </SectionCard>
   );
 }
 
@@ -529,11 +524,11 @@ function App() {
           <ServerHeader status={status} start={start} toast={toast} onCopy={onCopy} />
           <Tabs value={tab} onChange={pick} variant="scrollable" allowScrollButtonsMobile sx={{ mt: 4, mb: 3, borderBottom: 1, borderColor: 'divider' }} aria-label="Server sections">
             <Tab value="server" label="Server" />
-            <Tab value="files" label="Files & access" />
+            <Tab value="files" label="Files" />
             <Tab value="backups" label="Backups" />
             <Tab value="settings" label="Settings" />
           </Tabs>
-          {tab === 'server' && <ServerTab status={status} stop={stop} toast={toast} />}
+          {tab === 'server' && <ServerTab status={status} stop={stop} toast={toast} onCopy={onCopy} />}
           {tab === 'files' && <FilesTab running={running} toast={toast} onCopy={onCopy} />}
           {tab === 'backups' && <BackupsTab toast={toast} />}
           {tab === 'settings' && <SettingsTab toast={toast} />}
