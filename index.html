@@ -45,6 +45,7 @@ const {
   Card, Chip, Stack, Divider, IconButton, Tooltip, Tabs, Tab, LinearProgress, Table, TableHead,
   TableRow, TableCell, TableBody, TableContainer, ToggleButtonGroup, ToggleButton, Pagination,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, Snackbar, Link, SvgIcon,
+  CircularProgress,
 } = MaterialUI;
 const { useState } = React;
 
@@ -213,13 +214,18 @@ function Secret({ label, onCopy }) {
   );
 }
 
-function StatusChip({ running }) {
+const STATUS_LABEL = { stopped: 'Stopped', starting: 'Starting', running: 'Running' };
+const STARTING_TEXT = 'Server is starting up…';
+
+function StatusChip({ status }) {
   return (
     <Chip
       size="small"
       variant="outlined"
-      label={running ? 'Running' : 'Stopped'}
-      icon={<Box component="span" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: running ? 'success.main' : 'text.secondary', ml: '8px !important' }} />}
+      label={STATUS_LABEL[status]}
+      icon={status === 'starting'
+        ? <CircularProgress size={10} thickness={6} color="inherit" sx={{ ml: '8px !important' }} />
+        : <Box component="span" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: status === 'running' ? 'success.main' : 'text.secondary', ml: '8px !important' }} />}
       sx={{ fontWeight: 500 }}
     />
   );
@@ -250,25 +256,38 @@ function TopBar() {
   );
 }
 
-function ServerHeader({ running, setRunning, toast, onCopy }) {
+function ServerHeader({ status, start, toast, onCopy }) {
   return (
     <Stack gap={3}>
       <Box>
         <Link href="#" underline="hover" color="text.secondary" variant="body2" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
           <Icon name="back" sx={{ fontSize: 16 }} /> All servers
         </Link>
-        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'flex-end' }} gap={2} sx={{ mt: 1 }}>
-          <Box sx={{ minWidth: 0 }}>
-            <Stack direction="row" alignItems="center" gap={1.5} flexWrap="wrap">
-              <Typography variant="h4" component="h1" fontWeight={600} letterSpacing="-0.02em">{SERVER.name}</Typography>
-              <StatusChip running={running} />
-            </Stack>
-            <Typography color="text.secondary" sx={{ mt: 0.5 }}>{SERVER.region} · Foundry {SERVER.foundry}</Typography>
+        <Box sx={{
+          display: 'grid', alignItems: 'center', columnGap: 2, rowGap: 0.5, mt: 1,
+          gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'minmax(0,1fr) auto' },
+          gridTemplateAreas: { xs: '"title" "meta" "action"', sm: '"title action" "meta ."' },
+        }}>
+          <Stack direction="row" alignItems="center" gap={1.5} flexWrap="wrap" sx={{ gridArea: 'title', minWidth: 0 }}>
+            <Typography variant="h4" component="h1" fontWeight={600} letterSpacing="-0.02em">{SERVER.name}</Typography>
+            <StatusChip status={status} />
+          </Stack>
+          <Typography color="text.secondary" sx={{ gridArea: 'meta' }}>{SERVER.region} · Foundry {SERVER.foundry}</Typography>
+          {/* The hint is absolutely positioned so it never changes the header's height. */}
+          <Box sx={{ gridArea: 'action', position: 'relative', justifySelf: { xs: 'start', sm: 'end' }, mt: { xs: 1.5, sm: 0 } }}>
+            {status === 'running' && <Button variant="contained" size="large" onClick={() => toast(LINKS_OFF)} endIcon={<Icon name="open" />} sx={{ minWidth: 176 }}>Open Foundry</Button>}
+            {status === 'stopped' && <Button variant="contained" size="large" onClick={start} sx={{ minWidth: 176 }}>Start server</Button>}
+            {status === 'starting' && <>
+              <Button variant="contained" size="large" disabled startIcon={<CircularProgress size={18} thickness={5} color="inherit" />} sx={{ minWidth: 176 }}>Starting…</Button>
+              <Typography variant="caption" color="text.secondary" role="status" sx={{
+                position: 'absolute', top: '100%', mt: 0.5, whiteSpace: 'nowrap',
+                left: { xs: 0, sm: 'auto' }, right: { sm: 0 },
+              }}>
+                {STARTING_TEXT}
+              </Typography>
+            </>}
           </Box>
-          {running
-            ? <Button variant="contained" size="large" onClick={() => toast(LINKS_OFF)} endIcon={<Icon name="open" />} sx={{ flexShrink: 0 }}>Open Foundry</Button>
-            : <Button variant="contained" size="large" onClick={() => { setRunning(true); toast('Server started'); }} sx={{ flexShrink: 0 }}>Start server</Button>}
-        </Stack>
+        </Box>
       </Box>
 
       <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
@@ -297,18 +316,22 @@ function ServerHeader({ running, setRunning, toast, onCopy }) {
   );
 }
 
-function ServerTab({ running, setRunning, toast }) {
+function ServerTab({ status, stop, toast }) {
   const pct = Math.round((SERVER.storageUsed / SERVER.storageTotal) * 100);
   return (
     <SectionCard title="Server" subtitle="Power, Foundry version and storage for this server.">
       <Row
         label="Power"
-        actions={running && <>
+        // Hidden rather than removed so the row keeps its height when they appear.
+        actions={<Box sx={{ display: 'contents', visibility: status === 'running' ? 'visible' : 'hidden' }}>
           <Button variant="outlined" onClick={() => toast('Restarting Foundry…')}>Restart Foundry</Button>
-          <Button variant="outlined" color="warning" onClick={() => { setRunning(false); toast('Server stopped'); }}>Stop</Button>
-        </>}
+          <Button variant="outlined" color="warning" onClick={stop}>Stop</Button>
+        </Box>}
       >
-        <StatusChip running={running} />
+        <Stack direction="row" alignItems="center" gap={1.5}>
+          <StatusChip status={status} />
+          {status === 'starting' && <Typography variant="body2" color="text.secondary" noWrap>{STARTING_TEXT}</Typography>}
+        </Stack>
       </Row>
       <Row
         label="Foundry version"
@@ -476,7 +499,8 @@ function SettingsTab({ toast }) {
 
 function App() {
   const [tab, setTab] = useState(initialTab);
-  const [running, setRunning] = useState(true);
+  const [status, setStatus] = useState('stopped');
+  const running = status === 'running';
   const [msg, setMsg] = useState('');
   const toast = (m) => setMsg(m);
   const onCopy = (text, label) => {
@@ -486,6 +510,11 @@ function App() {
       toast('Copy was blocked here. Select the text to copy it.');
     }
   };
+  const start = () => {
+    setStatus('starting');
+    setTimeout(() => setStatus('running'), 2000);
+  };
+  const stop = () => { setStatus('stopped'); toast('Server stopped'); };
   const pick = (_, v) => {
     setTab(v);
     try { history.replaceState(null, '', '#' + v); } catch (e) {}
@@ -497,14 +526,14 @@ function App() {
       <TopBar />
       <Box component="main" className="gutter" sx={{ pt: { xs: 3, sm: 5 }, pb: 8 }}>
         <Container maxWidth="md" disableGutters>
-          <ServerHeader running={running} setRunning={setRunning} toast={toast} onCopy={onCopy} />
+          <ServerHeader status={status} start={start} toast={toast} onCopy={onCopy} />
           <Tabs value={tab} onChange={pick} variant="scrollable" allowScrollButtonsMobile sx={{ mt: 4, mb: 3, borderBottom: 1, borderColor: 'divider' }} aria-label="Server sections">
             <Tab value="server" label="Server" />
             <Tab value="files" label="Files & access" />
             <Tab value="backups" label="Backups" />
             <Tab value="settings" label="Settings" />
           </Tabs>
-          {tab === 'server' && <ServerTab running={running} setRunning={setRunning} toast={toast} />}
+          {tab === 'server' && <ServerTab status={status} stop={stop} toast={toast} />}
           {tab === 'files' && <FilesTab running={running} toast={toast} onCopy={onCopy} />}
           {tab === 'backups' && <BackupsTab toast={toast} />}
           {tab === 'settings' && <SettingsTab toast={toast} />}
