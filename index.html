@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Molten Server Page</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one column; server identity and invite link up top, everything else grouped under tabs. */
+  :root {
+    --bg: #121212;
+    --fg: #ffffff;
+    --muted: rgba(255, 255, 255, 0.7);
+    --line: rgba(255, 255, 255, 0.12);
+    --well: rgba(255, 255, 255, 0.04);
+    --neutral: #ededed;
+    --brand-red: #fd4a19;
+    --ok: #66bb6a;
+    --warn: #ffb300;
+    --font-body: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    color-scheme: dark;
+  }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font-body); }
+  .gutter {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  #boot { padding-block: 48px; color: var(--muted); font: 14px var(--font-body); }
+</style>
+</head>
+<body>
+<div id="root"><div id="boot" class="gutter">Loading my-server-name…</div></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@mui/material@5.16.7/umd/material-ui.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const {
+  createTheme, ThemeProvider, CssBaseline, AppBar, Toolbar, Box, Container, Typography, Button,
+  Card, Chip, Stack, Divider, IconButton, Tooltip, Tabs, Tab, LinearProgress, Table, TableHead,
+  TableRow, TableCell, TableBody, TableContainer, ToggleButtonGroup, ToggleButton, Pagination,
+  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, Snackbar, Link, SvgIcon,
+} = MaterialUI;
+const { useState } = React;
+
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const T = {
+  bg: css('--bg'), fg: css('--fg'), muted: css('--muted'), line: css('--line'), well: css('--well'),
+  neutral: css('--neutral'), red: css('--brand-red'), ok: css('--ok'), warn: css('--warn'),
+  body: css('--font-body'), mono: css('--font-mono'),
+};
+
+// Primary is neutral on purpose: red is reserved for the logo and destructive actions, amber for Stop.
+const theme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: { main: T.neutral, contrastText: T.bg },
+    error: { main: T.red, contrastText: T.bg },
+    success: { main: T.ok },
+    warning: { main: T.warn, contrastText: T.bg },
+    background: { default: T.bg, paper: T.bg },
+    divider: T.line,
+    text: { primary: T.fg, secondary: T.muted },
+  },
+  shape: { borderRadius: 10 },
+  typography: {
+    fontFamily: T.body,
+    button: { textTransform: 'none', fontWeight: 600 },
+    overline: { fontWeight: 600, letterSpacing: '0.08em', lineHeight: 1.6 },
+  },
+  components: {
+    MuiButton: { defaultProps: { disableElevation: true } },
+    MuiCard: { defaultProps: { variant: 'outlined' } },
+    MuiTab: { styleOverrides: { root: { textTransform: 'none', fontWeight: 600, fontSize: 15, minHeight: 48 } } },
+    MuiTabs: { styleOverrides: { indicator: { backgroundColor: T.red } } },
+    MuiTableCell: { styleOverrides: { root: { borderColor: T.line }, head: { color: T.muted, fontWeight: 500 } } },
+    MuiToggleButton: { styleOverrides: { root: { textTransform: 'none', fontWeight: 600, paddingInline: 14 } } },
+  },
+});
+
+const PATHS = {
+  cloud: 'M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z',
+  book: 'M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.1.05.15.05.25.05.25 0 .5-.25.5-.5V6c-.6-.45-1.25-.75-2-1zm0 13.5c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V8c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5v11.5z',
+  forum: 'M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z',
+  dns: 'M20 13H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1v-6c0-.55-.45-1-1-1zM7 19c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM20 3H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zM7 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z',
+  account: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm0 14c-2.03 0-4.43-.82-6.14-2.88C7.55 15.8 9.68 15 12 15s4.45.8 6.14 2.12C16.43 19.18 14.03 20 12 20z',
+  back: 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z',
+  copy: 'M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z',
+  eye: 'M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z',
+  eyeOff: 'M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z',
+  open: 'M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z',
+  arrow: 'M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z',
+};
+const Icon = ({ name, ...props }) => <SvgIcon {...props}><path d={PATHS[name]} /></SvgIcon>;
+
+const SERVER = {
+  name: 'my-server-name',
+  region: 'US West (Oregon)',
+  foundry: 'v14',
+  invite: 'https://my-server-name.moltenhosting.com?s=xxxxxxxxxx',
+  serverUrl: 'https://my-server-name.moltenhosting.com',
+  fileBrowser: 'https://my-server-name.files.moltenhosting.com',
+  webdav: 'https://my-server-name.webdav.moltenhosting.com',
+  ftpUser: 'foundry-ftp',
+  storageUsed: 9.6, storageTotal: 20,
+  storageUpdated: 'Oct 17, 2026 12:22 PM',
+  lastExport: 'October 11, 2026',
+};
+
+const MANUAL = [
+  ['Sep 26, 2026 11:38 PM', 'last session', 'in 5 months'],
+  ['Sep 6, 2026 1:54 AM', 'Gargoyle', 'in 5 months'],
+  ['Sep 5, 2026 5:37 PM', 'kool aid man', 'in 5 months'],
+  ['Jul 25, 2026 11:48 PM', 'troops need fixin', 'in 3 months'],
+  ['May 10, 2026 4:31 AM', 'after session', 'in 24 days'],
+  ['May 2, 2026 9:58 PM', 'End of session May2', 'in 16 days'],
+  ['Apr 25, 2026 1:44 PM', 'before point four', 'in 8 days'],
+];
+const AUTO = [
+  ['Oct 17, 2026 10:42 AM', 'in a month'], ['Oct 16, 2026 10:46 AM', 'in a month'],
+  ['Oct 15, 2026 10:49 AM', 'in a month'], ['Oct 14, 2026 10:44 AM', 'in 25 days'],
+  ['Oct 13, 2026 10:45 AM', 'in 24 days'], ['Oct 12, 2026 12:21 PM', 'in 23 days'],
+  ['Oct 12, 2026 9:00 AM', 'in 23 days'], ['Oct 11, 2026 9:05 AM', 'in 22 days'],
+  ['Oct 10, 2026 9:07 AM', 'in 21 days'], ['Oct 9, 2026 9:02 AM', 'in 20 days'],
+];
+
+const LINKS_OFF = 'Links are turned off in this mockup';
+
+const TABS = ['server', 'files', 'backups', 'settings'];
+const initialTab = () => {
+  const h = (location.hash || '').slice(1);
+  return TABS.includes(h) ? h : 'server';
+};
+
+const mono = { fontFamily: T.mono, fontSize: 14 };
+
+function SectionCard({ title, subtitle, action, children }) {
+  return (
+    <Card>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" gap={2} flexWrap="wrap" sx={{ px: 3, pt: 2.5, pb: subtitle ? 2 : 1.5 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="subtitle1" component="h3" fontWeight={600}>{title}</Typography>
+          {subtitle && <Typography variant="body2" color="text.secondary">{subtitle}</Typography>}
+        </Box>
+        {action}
+      </Stack>
+      <Divider />
+      {children}
+    </Card>
+  );
+}
+
+// label | value | actions — stacks to one column on phones
+function Row({ label, hint, children, actions, last }) {
+  return (
+    <>
+      <Box sx={{
+        display: 'grid', alignItems: 'center', columnGap: 3, rowGap: 1, px: 3, py: 2,
+        gridTemplateColumns: { xs: 'minmax(0,1fr)', md: '200px minmax(0,1fr) auto' },
+      }}>
+        <Box>
+          <Typography variant="body2" fontWeight={500}>{label}</Typography>
+          {hint && <Typography variant="caption" color="text.secondary">{hint}</Typography>}
+        </Box>
+        <Box sx={{ minWidth: 0 }}>{children}</Box>
+        {actions ? <Stack direction="row" gap={1} flexWrap="wrap" sx={{ justifySelf: { md: 'end' } }}>{actions}</Stack> : <span />}
+      </Box>
+      {!last && <Divider />}
+    </>
+  );
+}
+
+function CopyButton({ text, label, onCopy }) {
+  return (
+    <Tooltip title={`Copy ${label.toLowerCase()}`}>
+      <IconButton size="small" aria-label={`Copy ${label.toLowerCase()}`} onClick={() => onCopy(text, label)}>
+        <Icon name="copy" fontSize="small" />
+      </IconButton>
+    </Tooltip>
+  );
+}
+
+function Value({ text, onOpen, label, onCopy }) {
+  return (
+    <Stack direction="row" alignItems="center" gap={0.5} sx={{ minWidth: 0 }}>
+      {onOpen
+        ? <Link component="button" onClick={onOpen} color="inherit" underline="hover" sx={{ ...mono, overflowWrap: 'anywhere', textAlign: 'left' }}>{text}</Link>
+        : <Typography component="span" sx={{ ...mono, overflowWrap: 'anywhere' }}>{text}</Typography>}
+      <CopyButton text={text} label={label} onCopy={onCopy} />
+    </Stack>
+  );
+}
+
+function Secret({ label, onCopy }) {
+  const [shown, setShown] = useState(false);
+  return (
+    <Stack direction="row" alignItems="center" gap={0.5}>
+      <Typography component="span" sx={{ ...mono, letterSpacing: shown ? 0 : '0.15em', color: shown ? 'text.primary' : 'text.secondary' }}>
+        {shown ? '[password hidden in mockup]' : '••••••••••'}
+      </Typography>
+      <Tooltip title={shown ? 'Hide' : 'Show'}>
+        <IconButton size="small" aria-label={`${shown ? 'Hide' : 'Show'} ${label.toLowerCase()}`} onClick={() => setShown(!shown)}>
+          <Icon name={shown ? 'eyeOff' : 'eye'} fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <CopyButton text="[password]" label={label} onCopy={onCopy} />
+    </Stack>
+  );
+}
+
+function StatusChip({ running }) {
+  return (
+    <Chip
+      size="small"
+      variant="outlined"
+      label={running ? 'Running' : 'Stopped'}
+      icon={<Box component="span" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: running ? 'success.main' : 'text.secondary', ml: '8px !important' }} />}
+      sx={{ fontWeight: 500 }}
+    />
+  );
+}
+
+function TopBar() {
+  return (
+    <AppBar position="static" color="transparent" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+      <Box className="gutter">
+        <Toolbar disableGutters sx={{ gap: 1, minHeight: 64 }}>
+          <Link href="#" underline="none" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: T.red, mr: 2 }}>
+            <Icon name="cloud" sx={{ fontSize: 26 }} />
+            <Typography component="span" fontWeight={700} fontSize={18} letterSpacing="-0.01em">Molten Hosting</Typography>
+          </Link>
+          <Stack direction="row" gap={0.5} sx={{ display: { xs: 'none', md: 'flex' } }}>
+            <Button color="inherit" startIcon={<Icon name="book" />}>Guides</Button>
+            <Button color="inherit" startIcon={<Icon name="forum" />}>Discord support</Button>
+            <Button color="inherit" startIcon={<Icon name="dns" />}>Servers</Button>
+          </Stack>
+          <Box sx={{ flexGrow: 1 }} />
+          <Button color="inherit" startIcon={<Icon name="account" />}>
+            Account
+            <Chip label="Elite" size="small" sx={{ ml: 1, height: 20, fontSize: 11, fontWeight: 600, letterSpacing: '0.04em' }} />
+          </Button>
+        </Toolbar>
+      </Box>
+    </AppBar>
+  );
+}
+
+function ServerHeader({ running, setRunning, toast, onCopy }) {
+  return (
+    <Stack gap={3}>
+      <Box>
+        <Link href="#" underline="hover" color="text.secondary" variant="body2" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+          <Icon name="back" sx={{ fontSize: 16 }} /> All servers
+        </Link>
+        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'flex-end' }} gap={2} sx={{ mt: 1 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Stack direction="row" alignItems="center" gap={1.5} flexWrap="wrap">
+              <Typography variant="h4" component="h1" fontWeight={600} letterSpacing="-0.02em">{SERVER.name}</Typography>
+              <StatusChip running={running} />
+            </Stack>
+            <Typography color="text.secondary" sx={{ mt: 0.5 }}>{SERVER.region} · Foundry {SERVER.foundry}</Typography>
+          </Box>
+          {running
+            ? <Button variant="contained" size="large" onClick={() => toast(LINKS_OFF)} endIcon={<Icon name="open" />} sx={{ flexShrink: 0 }}>Open Foundry</Button>
+            : <Button variant="contained" size="large" onClick={() => { setRunning(true); toast('Server started'); }} sx={{ flexShrink: 0 }}>Start server</Button>}
+        </Stack>
+      </Box>
+
+      <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
+        <Stack gap={1.5}>
+          <Box>
+            <Typography variant="subtitle1" component="h2" fontWeight={600}>Invite link</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Share this with your players. Opening it wakes the server, so nobody waits for you.
+            </Typography>
+          </Box>
+          <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5} alignItems={{ sm: 'center' }}>
+            <Link component="button" onClick={() => toast(LINKS_OFF)} color="inherit" underline="hover" sx={{
+              flex: 1, minWidth: 0, textAlign: 'left', px: 2, py: 1.25, borderRadius: 1, border: 1, borderColor: 'divider',
+              bgcolor: T.well, ...mono, fontSize: 15, overflowWrap: 'anywhere',
+              '&:hover': { borderColor: 'text.secondary' },
+            }}>
+              {SERVER.invite}
+            </Link>
+            <Button variant="outlined" size="large" startIcon={<Icon name="copy" />} onClick={() => onCopy(SERVER.invite, 'Invite link')} sx={{ flexShrink: 0 }}>
+              Copy invite link
+            </Button>
+          </Stack>
+        </Stack>
+      </Card>
+    </Stack>
+  );
+}
+
+function ServerTab({ running, setRunning, toast }) {
+  const pct = Math.round((SERVER.storageUsed / SERVER.storageTotal) * 100);
+  return (
+    <SectionCard title="Server" subtitle="Power, Foundry version and storage for this server.">
+      <Row
+        label="Power"
+        actions={running && <>
+          <Button variant="outlined" onClick={() => toast('Restarting Foundry…')}>Restart Foundry</Button>
+          <Button variant="outlined" color="warning" onClick={() => { setRunning(false); toast('Server stopped'); }}>Stop</Button>
+        </>}
+      >
+        <StatusChip running={running} />
+      </Row>
+      <Row
+        label="Foundry version"
+        actions={<Button variant="outlined" onClick={() => toast(`Reinstalling Foundry ${SERVER.foundry}…`)}>Reinstall {SERVER.foundry}</Button>}
+      >
+        <Typography sx={mono}>{SERVER.foundry}</Typography>
+      </Row>
+      <Row
+        label="Storage"
+        hint={`Updated ${SERVER.storageUpdated}`}
+        actions={<Button color="inherit" endIcon={<Icon name="arrow" />}>Add storage or upgrade tier</Button>}
+      >
+        <Stack gap={1} sx={{ maxWidth: 420 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="baseline">
+            <Typography sx={{ fontVariantNumeric: 'tabular-nums' }}>
+              <Box component="span" fontWeight={600}>{SERVER.storageUsed} GB</Box>
+              <Box component="span" color="text.secondary"> of {SERVER.storageTotal} GB</Box>
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ fontVariantNumeric: 'tabular-nums' }}>{pct}%</Typography>
+          </Stack>
+          <LinearProgress variant="determinate" value={pct} aria-label="Storage used" sx={{ height: 6, borderRadius: 3, bgcolor: T.line }} />
+          <Typography variant="caption" color="text.secondary">Refreshes every 5 minutes while the server is running.</Typography>
+        </Stack>
+      </Row>
+      <Row label="Region" last>
+        <Typography>{SERVER.region}</Typography>
+      </Row>
+    </SectionCard>
+  );
+}
+
+function FilesTab({ running, toast, onCopy }) {
+  return (
+    <Stack gap={3}>
+      <SectionCard title="Foundry" subtitle="Where you and your players sign in.">
+        <Row label="Server URL"><Value text={SERVER.serverUrl} onOpen={() => toast(LINKS_OFF)} label="Server URL" onCopy={onCopy} /></Row>
+        <Row label="Administrator password" hint="For the Foundry setup screen" last><Secret label="Administrator password" onCopy={onCopy} /></Row>
+      </SectionCard>
+
+      <SectionCard
+        title="File manager"
+        subtitle={running ? 'Upload maps, tokens and modules. Available while the server is running.' : 'Start the server to manage files.'}
+        action={<Button variant="outlined" onClick={() => toast(LINKS_OFF)} endIcon={<Icon name="open" />} disabled={!running}>Open FileBrowser</Button>}
+      >
+        <Row label="FileBrowser"><Value text={SERVER.fileBrowser} onOpen={() => toast(LINKS_OFF)} label="FileBrowser URL" onCopy={onCopy} /></Row>
+        <Row label="Username"><Value text={SERVER.ftpUser} label="Username" onCopy={onCopy} /></Row>
+        <Row label="Password"><Secret label="FileBrowser password" onCopy={onCopy} /></Row>
+        <Row label="WebDAV host" hint="For desktop sync apps" last><Value text={SERVER.webdav} label="WebDAV host" onCopy={onCopy} /></Row>
+      </SectionCard>
+    </Stack>
+  );
+}
+
+function BackupsTab({ toast }) {
+  const [kind, setKind] = useState('manual');
+  const [page, setPage] = useState(1);
+  const [pending, setPending] = useState(null);
+  const rows = kind === 'manual'
+    ? MANUAL.map(([when, note, exp]) => ({ when, note, exp }))
+    : AUTO.map(([when, exp]) => ({ when, note: 'Nightly', exp }));
+
+  return (
+    <Stack gap={3}>
+      <SectionCard title="Game data export" action={<Button variant="outlined" onClick={() => toast('Export started. We’ll have it ready shortly.')}>Export game data</Button>}>
+        <Row label="Latest export" last actions={<Button color="inherit" endIcon={<Icon name="arrow" />}>Download</Button>}>
+          <Typography>Generated {SERVER.lastExport}</Typography>
+        </Row>
+      </SectionCard>
+
+      <SectionCard
+        title="Backups"
+        subtitle="Restoring a backup replaces the current world data on this server."
+        action={<Button variant="outlined" onClick={() => toast('Backup started')}>Create backup</Button>}
+      >
+        <Box sx={{ px: 3, pt: 2 }}>
+          <ToggleButtonGroup size="small" exclusive value={kind} onChange={(_, v) => { if (v) { setKind(v); setPage(1); } }} aria-label="Backup type">
+            <ToggleButton value="manual">Your backups <Box component="span" color="text.secondary" ml={1}>{MANUAL.length}</Box></ToggleButton>
+            <ToggleButton value="auto">Automatic</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+        <TableContainer sx={{ px: 1.5, pb: 1 }}>
+          <Table size="medium" sx={{ minWidth: 480 }}>
+            <TableHead>
+              <TableRow>
+                <TableCell>Backup</TableCell>
+                <TableCell>Expires</TableCell>
+                <TableCell align="right"><Box component="span" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Actions</Box></TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rows.map((r, i) => (
+                <TableRow key={kind + i} hover sx={{ '&:last-child td': { borderBottom: 0 } }}>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight={500} sx={{ fontVariantNumeric: 'tabular-nums' }}>{r.when}</Typography>
+                    <Typography variant="caption" color="text.secondary">{r.note}</Typography>
+                  </TableCell>
+                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{r.exp}</TableCell>
+                  <TableCell align="right">
+                    <Button size="small" variant="outlined" onClick={() => setPending(r)}>Restore</Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        {kind === 'auto' && (
+          <>
+            <Divider />
+            <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ px: 3, py: 1.5 }}>
+              <Typography variant="caption" color="text.secondary">One backup every night, kept for about a month.</Typography>
+              <Pagination count={3} page={page} onChange={(_, p) => setPage(p)} size="small" />
+            </Stack>
+          </>
+        )}
+      </SectionCard>
+
+      <Dialog open={!!pending} onClose={() => setPending(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Restore this backup?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {SERVER.name} will go back to the backup from <b>{pending?.when}</b> ({pending?.note}). Changes made since then are lost.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button color="inherit" onClick={() => setPending(null)}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={() => { setPending(null); toast('Restore started'); }}>Restore backup</Button>
+        </DialogActions>
+      </Dialog>
+    </Stack>
+  );
+}
+
+function SettingsTab({ toast }) {
+  const [confirming, setConfirming] = useState(false);
+  const [typed, setTyped] = useState('');
+  const close = () => { setConfirming(false); setTyped(''); };
+  return (
+    <Stack gap={3}>
+      <SectionCard title="Notifications">
+        <Row label="Discord" hint="Posts to a channel when the server starts or stops" last actions={<Button variant="outlined" onClick={() => toast('Webhook form opens here')}>Add webhook</Button>}>
+          <Typography color="text.secondary">Not connected</Typography>
+        </Row>
+      </SectionCard>
+
+      <SectionCard title="Danger zone">
+        <Row label="Delete server" last actions={<Button variant="outlined" color="error" onClick={() => setConfirming(true)}>Delete server</Button>}>
+          <Typography color="text.secondary">Permanently delete {SERVER.name}. This can’t be undone.</Typography>
+        </Row>
+      </SectionCard>
+
+      <Dialog open={confirming} onClose={close} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete {SERVER.name}?</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>Type the server name to confirm.</DialogContentText>
+          <TextField id="confirm-delete" fullWidth size="small" autoFocus placeholder={SERVER.name} value={typed} onChange={(e) => setTyped(e.target.value)} inputProps={{ style: mono }} />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button color="inherit" onClick={close}>Cancel</Button>
+          <Button variant="contained" color="error" disabled={typed !== SERVER.name} onClick={() => { close(); toast('Deletion is turned off in this mockup'); }}>Delete server</Button>
+        </DialogActions>
+      </Dialog>
+    </Stack>
+  );
+}
+
+function App() {
+  const [tab, setTab] = useState(initialTab);
+  const [running, setRunning] = useState(true);
+  const [msg, setMsg] = useState('');
+  const toast = (m) => setMsg(m);
+  const onCopy = (text, label) => {
+    try {
+      navigator.clipboard.writeText(text).then(() => toast(`${label} copied`), () => toast('Copy was blocked here. Select the text to copy it.'));
+    } catch (e) {
+      toast('Copy was blocked here. Select the text to copy it.');
+    }
+  };
+  const pick = (_, v) => {
+    setTab(v);
+    try { history.replaceState(null, '', '#' + v); } catch (e) {}
+  };
+
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <TopBar />
+      <Box component="main" className="gutter" sx={{ pt: { xs: 3, sm: 5 }, pb: 8 }}>
+        <Container maxWidth="md" disableGutters>
+          <ServerHeader running={running} setRunning={setRunning} toast={toast} onCopy={onCopy} />
+          <Tabs value={tab} onChange={pick} variant="scrollable" allowScrollButtonsMobile sx={{ mt: 4, mb: 3, borderBottom: 1, borderColor: 'divider' }} aria-label="Server sections">
+            <Tab value="server" label="Server" />
+            <Tab value="files" label="Files & access" />
+            <Tab value="backups" label="Backups" />
+            <Tab value="settings" label="Settings" />
+          </Tabs>
+          {tab === 'server' && <ServerTab running={running} setRunning={setRunning} toast={toast} />}
+          {tab === 'files' && <FilesTab running={running} toast={toast} onCopy={onCopy} />}
+          {tab === 'backups' && <BackupsTab toast={toast} />}
+          {tab === 'settings' && <SettingsTab toast={toast} />}
+        </Container>
+      </Box>
+      <Divider />
+      <Box className="gutter" sx={{ py: 3 }}>
+        <Link href="#" color="text.secondary" variant="body2">Terms and conditions</Link>
+      </Box>
+      <Snackbar open={!!msg} autoHideDuration={2500} onClose={() => setMsg('')} message={msg} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} />
+    </ThemeProvider>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
